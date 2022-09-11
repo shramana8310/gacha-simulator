@@ -1,0 +1,101 @@
+version: '3'
+services:
+  web:
+    container_name: web
+    build: ./web
+    ports:
+      - 443:443
+    restart: on-failure
+    environment:
+      - SERVER_NAME=${NGINX_SERVER_NAME}
+    secrets:
+      - site.key
+      - site.crt
+    volumes:
+      - web:/web
+    depends_on:
+      - app
+    networks:
+      - gacha-simulator-network
+    command: /bin/sh -c "envsubst '$${SERVER_NAME}' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf && nginx -g 'daemon off;'"
+
+  app:
+    container_name: app
+    build: ./app
+    ports:
+      - 8080:8080
+    restart: on-failure
+    environment:
+      - GACHA_ENV=production
+      - OAUTH_PUBLIC_CLIENT_DOMAIN=${OAUTH_PUBLIC_CLIENT_DOMAIN}
+    secrets:
+      - db_user
+      - db_password
+      - db_name
+      - oauth_private_client_id
+      - oauth_private_client_secret
+    volumes:
+      - app:/usr/src/app/
+    depends_on:
+      wait-for-mysql:
+        condition: service_completed_successfully
+    networks:
+      - gacha-simulator-network
+
+  wait-for-mysql:
+    container_name: wait-for-mysql
+    image: atkrad/wait4x
+    depends_on:
+      - mysql
+    command: tcp mysql:3306 -t 10m -i 10s
+    networks:
+      - gacha-simulator-network
+
+  mysql:
+    container_name: mysql
+    image: mysql:5.7
+    ports: 
+      - 3306:3306
+    environment:
+      - MYSQL_ROOT_PASSWORD_FILE=/run/secrets/db_root_password
+      - MYSQL_USER_FILE=/run/secrets/db_user
+      - MYSQL_PASSWORD_FILE=/run/secrets/db_password
+      - MYSQL_DATABASE_FILE=/run/secrets/db_name
+      - LANG=C.UTF-8
+    secrets:
+      - db_root_password
+      - db_user
+      - db_password
+      - db_name
+    volumes:
+      - mysql:/var/lib/mysql
+    networks:
+      - gacha-simulator-network
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+
+secrets:
+  db_root_password:
+    file: ./secrets/db_root_password.txt
+  db_user:
+    file: ./secrets/db_user.txt
+  db_password:
+    file: ./secrets/db_password.txt
+  db_name:
+    file: ./secrets/db_name.txt
+  oauth_private_client_id:
+    file: ./secrets/oauth_private_client_id.txt
+  oauth_private_client_secret:
+    file: ./secrets/oauth_private_client_secret.txt
+  site.key:
+    file: ./secrets/site.key
+  site.crt:
+    file: ./secrets/site.crt
+
+volumes:
+  web:
+  app:
+  mysql:
+
+networks:
+  gacha-simulator-network:
+    driver: bridge
