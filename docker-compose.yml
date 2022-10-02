@@ -6,15 +6,12 @@ services:
     ports:
       - 80:80
     restart: on-failure
-    environment:
-      - SERVER_NAME=localhost
     volumes:
       - web:/web
     depends_on:
       - app
     networks:
       - gacha-simulator-network
-    command: /bin/sh -c "envsubst '$${SERVER_NAME}' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf && nginx -g 'daemon off;'"
 
   app:
     container_name: app
